@@ -9,7 +9,13 @@ const PORT = process.env.PORT || 3000;
 
 const CLIENT_ID = process.env.STRAVA_CLIENT_ID;
 const CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET;
-const REDIRECT_URI = `http://localhost:${PORT}/auth/callback`;
+
+// Auto-detect URL: Railway provides RAILWAY_PUBLIC_DOMAIN, fallback to localhost
+const BASE_URL = process.env.RAILWAY_PUBLIC_DOMAIN
+  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+  : `http://localhost:${PORT}`;
+
+const REDIRECT_URI = `${BASE_URL}/auth/callback`;
 
 app.use(express.json());
 app.use(session({
