@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Strava Heatmap</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --accent: #fc4c02;
+    --accent2: #ff9500;
+    --text: #e8e8f0;
+    --muted: #555570;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Animated background grid */
+  .grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(252,76,2,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(252,76,2,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    animation: gridMove 20s linear infinite;
+  }
+
+  @keyframes gridMove {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(60px); }
+  }
+
+  /* Glow orb */
+  .orb {
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(252,76,2,0.12) 0%, transparent 70%);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .container {
+    position: relative;
+    z-index: 10;
+    text-align: center;
+    padding: 40px;
+    max-width: 560px;
+  }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 72px;
+    letter-spacing: 8px;
+    line-height: 1;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+    animation: fadeUp 0.8s ease both;
+  }
+
+  .tagline {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 48px;
+    animation: fadeUp 0.8s ease 0.1s both;
+  }
+
+  .features {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 48px;
+    animation: fadeUp 0.8s ease 0.2s both;
+  }
+
+  .feature {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 16px;
+    text-align: left;
+  }
+
+  .feature-icon { font-size: 20px; margin-bottom: 8px; display: block; }
+
+  .feature-title {
+    font-size: 11px;
+    color: var(--text);
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+
+  .feature-desc {
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .btn-strava {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--accent);
+    color: white;
+    text-decoration: none;
+    padding: 16px 36px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    animation: fadeUp 0.8s ease 0.3s both;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-strava::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.5s;
+  }
+
+  .btn-strava:hover::before { transform: translateX(100%); }
+  .btn-strava:hover { background: #e84400; transform: translateY(-2px); box-shadow: 0 8px 32px rgba(252,76,2,0.4); }
+
+  .strava-logo {
+    width: 20px;
+    height: 20px;
+  }
+
+  .note {
+    margin-top: 20px;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    animation: fadeUp 0.8s ease 0.4s both;
+  }
+
+  .error-msg {
+    background: rgba(252,76,2,0.1);
+    border: 1px solid rgba(252,76,2,0.3);
+    color: var(--accent);
+    padding: 10px 20px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    margin-bottom: 24px;
+    display: none;
+  }
+
+  .error-msg.show { display: block; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+<div class="grid"></div>
+<div class="orb"></div>
+
+<div class="container">
+  <div class="logo">HEATMAP</div>
+  <div class="tagline">Your Strava activities. Free. Private. Beautiful.</div>
+
+  <div id="error-box" class="error-msg"></div>
+
+  <div class="features">
+    <div class="feature">
+      <span class="feature-icon">🗺️</span>
+      <div class="feature-title">All Activities</div>
+      <div class="feature-desc">Every run, ride, hike — visualized on one map</div>
+    </div>
+    <div class="feature">
+      <span class="feature-icon">🔥</span>
+      <div class="feature-title">Real Heatmap</div>
+      <div class="feature-desc">Intensity based on frequency — like Strava Summit</div>
+    </div>
+    <div class="feature">
+      <span class="feature-icon">🔒</span>
+      <div class="feature-title">100% Private</div>
+      <div class="feature-desc">Runs locally, data never leaves your machine</div>
+    </div>
+    <div class="feature">
+      <span class="feature-icon">⚡</span>
+      <div class="feature-title">Fast & Free</div>
+      <div class="feature-desc">No subscription, no limits, no ads</div>
+    </div>
+  </div>
+
+  <a href="/auth/strava" class="btn-strava">
+    <svg class="strava-logo" viewBox="0 0 24 24" fill="white">
+      <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.599h4.172L10.463 0 5 13.828h4.172"/>
+    </svg>
+    Connect with Strava
+  </a>
+
+  <div class="note">
+    🔐 Uses official Strava OAuth — we only request read access to your activities
+  </div>
+</div>
+
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const error = params.get('error');
+  if (error) {
+    const box = document.getElementById('error-box');
+    box.textContent = error === 'access_denied'
+      ? '⚠ Access denied — please authorize the app in Strava'
+      : '⚠ Authentication failed — check your Client ID and Secret in .env';
+    box.classList.add('show');
+  }
+</script>
+</body>
+</html>

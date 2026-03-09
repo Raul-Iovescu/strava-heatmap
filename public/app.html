@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Strava Heatmap</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0a0a0f; --surface:rgba(10,10,18,0.85); --border:rgba(255,255,255,0.1);
+    --accent:#fc4c02; --accent2:#ff9500; --text:#e8e8f0; --muted:#8888aa;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+  header { display:flex; align-items:center; justify-content:space-between; padding:0 16px; height:52px; background:var(--surface); backdrop-filter:blur(16px); border-bottom:1px solid var(--border); z-index:1000; flex-shrink:0; gap:12px; }
+  .logo { font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:3px; background:linear-gradient(90deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .stats { display:flex; gap:24px; align-items:center; flex:1; justify-content:center; }
+  .stat { text-align:center; }
+  .stat-value { font-family:'Bebas Neue',sans-serif; font-size:20px; color:var(--accent2); line-height:1; }
+  .stat-label { font-size:8px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+  .athlete { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+  .avatar { width:30px; height:30px; border-radius:50%; border:2px solid var(--accent); overflow:hidden; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,var(--accent),var(--accent2)); font-family:'Bebas Neue',sans-serif; font-size:14px; color:white; }
+  .avatar img { width:100%; height:100%; object-fit:cover; display:none; }
+  .aname { font-size:10px; color:var(--text); }
+  .acity { font-size:8px; color:var(--muted); }
+  .btn-logout { padding:5px 12px; background:transparent; border:1px solid var(--border); color:var(--muted); font-family:'DM Mono',monospace; font-size:9px; letter-spacing:1px; text-transform:uppercase; cursor:pointer; text-decoration:none; transition:all .2s; border-radius:2px; }
+  .btn-logout:hover { border-color:var(--accent); color:var(--accent); }
+  #map { flex:1; width:100%; }
+  #sidebar { position:absolute; right:12px; top:64px; bottom:12px; width:215px; z-index:1000; display:flex; flex-direction:column; gap:8px; }
+  .panel { background:var(--surface); backdrop-filter:blur(16px); border:1px solid var(--border); padding:13px; border-radius:6px; }
+  .panel-title { font-size:8px; color:var(--muted); text-transform:uppercase; letter-spacing:2px; margin-bottom:10px; padding-bottom:7px; border-bottom:1px solid var(--border); }
+  .ctrl-label { font-size:9px; color:var(--muted); letter-spacing:1px; margin-bottom:3px; margin-top:9px; display:flex; justify-content:space-between; }
+  .ctrl-label:first-of-type { margin-top:0; }
+  .ctrl-val { color:var(--accent2); }
+  input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
+  .filters { display:flex; flex-wrap:wrap; gap:4px; }
+  .filter-btn { padding:3px 9px; font-family:'DM Mono',monospace; font-size:8px; letter-spacing:1px; text-transform:uppercase; border:1px solid var(--border); background:transparent; color:var(--muted); cursor:pointer; transition:all .15s; border-radius:3px; }
+  .filter-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(252,76,2,.12); }
+  select { width:100%; background:rgba(0,0,0,.6); border:1px solid var(--border); color:var(--text); font-family:'DM Mono',monospace; font-size:9px; padding:5px 8px; cursor:pointer; margin-top:4px; border-radius:3px; }
+  #layers { position:absolute; left:54px; bottom:24px; z-index:1000; display:flex; gap:4px; }
+  .lbtn { padding:5px 12px; background:var(--surface); backdrop-filter:blur(12px); border:1px solid var(--border); color:var(--muted); font-family:'DM Mono',monospace; font-size:8px; letter-spacing:1px; text-transform:uppercase; cursor:pointer; transition:all .15s; border-radius:3px; }
+  .lbtn.active { border-color:var(--accent); color:var(--accent); background:rgba(252,76,2,.1); }
+  .act-list { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:3px; max-height:180px; }
+  .act-list::-webkit-scrollbar { width:2px; }
+  .act-list::-webkit-scrollbar-thumb { background:rgba(255,255,255,.15); }
+  .act-item { display:flex; align-items:center; gap:7px; padding:5px 6px; font-size:9px; border-radius:3px; }
+  .act-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+  .act-name { color:var(--text); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .act-dist { color:var(--muted); flex-shrink:0; }
+  #loading { position:absolute; inset:0; background:rgba(8,8,14,.96); z-index:2000; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; transition:opacity .6s; }
+  #loading.hidden { opacity:0; pointer-events:none; }
+  .ltitle { font-family:'Bebas Neue',sans-serif; font-size:28px; letter-spacing:5px; }
+  .lsub { font-size:10px; color:var(--muted); letter-spacing:1.5px; }
+  .ptrack { width:300px; height:2px; background:rgba(255,255,255,.08); border-radius:2px; }
+  .pfill { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); width:0%; transition:width .4s; }
+  .ldetail { font-size:9px; color:var(--muted); min-height:13px; }
+  .leaflet-control-zoom a { background:var(--surface) !important; backdrop-filter:blur(12px) !important; border-color:var(--border) !important; color:var(--text) !important; }
+  .leaflet-control-zoom a:hover { background:rgba(252,76,2,.2) !important; color:var(--accent) !important; }
+  .leaflet-control-attribution { background:rgba(0,0,0,.5) !important; color:rgba(255,255,255,.3) !important; font-size:8px !important; }
+  .leaflet-control-attribution a { color:rgba(255,255,255,.4) !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">HEATMAP</div>
+  <div class="stats">
+    <div class="stat"><div class="stat-value" id="s-acts">—</div><div class="stat-label">Activities</div></div>
+    <div class="stat"><div class="stat-value" id="s-pts">—</div><div class="stat-label">GPS Points</div></div>
+    <div class="stat"><div class="stat-value" id="s-km">— km</div><div class="stat-label">Total</div></div>
+  </div>
+  <div class="athlete">
+    <div class="avatar">
+      <img id="athlete-img" src="" alt="">
+      <span id="athlete-initials"></span>
+    </div>
+    <div>
+      <div class="aname" id="athlete-name"></div>
+      <div class="acity" id="athlete-city">Strava</div>
+    </div>
+  </div>
+  <a href="/auth/logout" class="btn-logout">Logout</a>
+</header>
+
+<div id="map"></div>
+
+<div id="layers">
+  <button class="lbtn" onclick="setLayer('dark')">🌑 Dark</button>
+  <button class="lbtn active" onclick="setLayer('satellite')">🛰 Satellite</button>
+  <button class="lbtn" onclick="setLayer('hybrid')">🗺 Hybrid</button>
+  <button class="lbtn" onclick="setLayer('topo')">⛰ Topo</button>
+</div>
+
+<div id="sidebar">
+  <div class="panel">
+    <div class="panel-title">Activity Type</div>
+    <div class="filters">
+      <button class="filter-btn active" data-type="all">All</button>
+      <button class="filter-btn" data-type="Run">🏃 Run</button>
+      <button class="filter-btn" data-type="Ride">🚴 Ride</button>
+      <button class="filter-btn" data-type="Hike">🥾 Hike</button>
+      <button class="filter-btn" data-type="Walk">🚶 Walk</button>
+      <button class="filter-btn" data-type="Swim">🏊 Swim</button>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">Heatmap</div>
+    <div class="ctrl-label">Radius <span class="ctrl-val" id="v-r">14</span></div>
+    <input type="range" id="r-r" min="3" max="50" value="14">
+    <div class="ctrl-label">Intensity <span class="ctrl-val" id="v-i">6</span></div>
+    <input type="range" id="r-i" min="1" max="20" value="6">
+    <div class="ctrl-label">Blur <span class="ctrl-val" id="v-b">12</span></div>
+    <input type="range" id="r-b" min="1" max="30" value="12">
+    <div class="ctrl-label" style="margin-top:10px">Color Theme</div>
+    <select id="r-theme">
+      <option value="strava">🔥 Strava</option>
+      <option value="fire">🌋 Fire</option>
+      <option value="ocean">🌊 Ocean</option>
+      <option value="neon">💚 Neon</option>
+      <option value="white">⚪ White Hot</option>
+    </select>
+  </div>
+  <div class="panel" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+    <div class="panel-title">Recent Activities</div>
+    <div class="act-list" id="act-list"></div>
+  </div>
+</div>
+
+<div id="loading">
+  <div class="ltitle">Loading Activities</div>
+  <div class="ptrack"><div class="pfill" id="pfill"></div></div>
+  <div class="lsub" id="lsub">Connecting to Strava...</div>
+  <div class="ldetail" id="ldetail"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script>
+// ── Map ───────────────────────────────────────────────────────────────────────
+const map = L.map('map', { center:[45.75,21.23], zoom:13, zoomControl:false });
+L.control.zoom({ position:'topleft' }).addTo(map);
+
+const tiles = {
+  dark:      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{ attribution:'© OpenStreetMap © CARTO', subdomains:'abcd', maxZoom:19 }),
+  satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{ attribution:'© Esri, Maxar', maxZoom:19 }),
+  hybrid:    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{ attribution:'© Esri', maxZoom:19 }),
+  topo:      L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{ attribution:'© OpenTopoMap', subdomains:'abc', maxZoom:17 }),
+};
+const hybridLabels = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',{ subdomains:'abcd', maxZoom:19, opacity:0.9 });
+tiles.satellite.addTo(map);
+
+function setLayer(name) {
+  document.querySelectorAll('.lbtn').forEach(b=>b.classList.remove('active'));
+  document.querySelector(`[onclick="setLayer('${name}')"]`).classList.add('active');
+  Object.values(tiles).forEach(l=>{ try{map.removeLayer(l);}catch(e){} });
+  try{map.removeLayer(hybridLabels);}catch(e){}
+  tiles[name].addTo(map);
+  if(name==='hybrid') hybridLabels.addTo(map);
+}
+
+// ── Heatmap ───────────────────────────────────────────────────────────────────
+const gradients = {
+  strava:{ 0.2:'#2d0a00', 0.4:'#7a1f00', 0.6:'#c73a00', 0.8:'#fc4c02', 1.0:'#ffcc00' },
+  fire:  { 0.2:'#000033', 0.4:'#7700aa', 0.6:'#ff0000', 0.8:'#ff8800', 1.0:'#ffff00' },
+  ocean: { 0.2:'#000033', 0.4:'#003399', 0.6:'#0099cc', 0.8:'#00ccff', 1.0:'#ffffff' },
+  neon:  { 0.2:'#001100', 0.4:'#003300', 0.6:'#00aa00', 0.8:'#00ff44', 1.0:'#ccffcc' },
+  white: { 0.2:'#111', 0.4:'#444', 0.6:'#888', 0.8:'#ccc', 1.0:'#fff' },
+};
+let heatLayer = L.heatLayer([], { radius:14, blur:12, maxZoom:17, gradient:gradients.strava }).addTo(map);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let allActivities=[], currentFilter='all';
+
+// ── Athlete ───────────────────────────────────────────────────────────────────
+async function loadAthlete() {
+  try {
+    const a = await fetch('/api/athlete').then(r=>r.json());
+    document.getElementById('athlete-name').textContent = `${a.firstname} ${a.lastname}`;
+    if(a.city) document.getElementById('athlete-city').textContent = a.city;
+    const img = document.getElementById('athlete-img');
+    const initials = document.getElementById('athlete-initials');
+    if(a.profile && !a.profile.includes('avatar/athlete/large')) {
+      img.src = a.profile;
+      img.style.display = 'block';
+      initials.style.display = 'none';
+    } else {
+      initials.textContent = `${a.firstname?.[0]||''}${a.lastname?.[0]||''}`;
+    }
+  } catch(e) {}
+}
+
+// ── Activities ────────────────────────────────────────────────────────────────
+async function loadAllActivities() {
+  setLoading(true,'Connecting to Strava...',5);
+  try {
+    let page=1, hasMore=true, activities=[];
+    while(hasMore) {
+      const data = await fetch(`/api/activities?page=${page}`).then(r=>r.json());
+      if(data.error) throw new Error(data.error);
+      activities = activities.concat(data.activities);
+      hasMore = data.hasMore;
+      page++;
+      setProgress(Math.min(5+activities.length*0.25, 55));
+      setDetail(`${activities.length} activities found...`);
+    }
+    setLoading(true,'Decoding GPS routes...',60);
+    // Decode polylines — yield every 100 to keep UI responsive
+    const decoded=[];
+    for(let i=0;i<activities.length;i++) {
+      const a=activities[i];
+      decoded.push({
+        ...a,
+        points: a.map?.summary_polyline ? decodePolyline(a.map.summary_polyline) : []
+      });
+      if(i%100===0) {
+        setProgress(60+(i/activities.length)*30);
+        await new Promise(r=>setTimeout(r,0));
+      }
+    }
+    allActivities=decoded;
+    setLoading(true,'Rendering...',92);
+    await new Promise(r=>setTimeout(r,50));
+    renderHeatmap(); fitBounds(); renderList(); updateStats();
+    setLoading(false);
+  } catch(e) {
+    console.error(e);
+    document.getElementById('lsub').textContent='⚠ '+e.message;
+  }
+}
+
+// Google Encoded Polyline decoder
+function decodePolyline(enc) {
+  const pts=[]; let i=0,lat=0,lng=0;
+  while(i<enc.length) {
+    let b,shift=0,result=0;
+    do{b=enc.charCodeAt(i++)-63;result|=(b&0x1f)<<shift;shift+=5;}while(b>=0x20);
+    lat+=(result&1)?~(result>>1):(result>>1);
+    shift=0;result=0;
+    do{b=enc.charCodeAt(i++)-63;result|=(b&0x1f)<<shift;shift+=5;}while(b>=0x20);
+    lng+=(result&1)?~(result>>1):(result>>1);
+    pts.push([lat/1e5,lng/1e5]);
+  }
+  return pts;
+}
+
+function getFiltered() {
+  return currentFilter==='all' ? allActivities
+    : allActivities.filter(a=>a.type===currentFilter||a.sport_type===currentFilter);
+}
+
+function renderHeatmap() {
+  heatLayer.setLatLngs(getFiltered().flatMap(a=>a.points));
+}
+
+function updateStats() {
+  const f=getFiltered();
+  const pts=f.flatMap(a=>a.points).length;
+  const km=Math.round(f.reduce((s,a)=>s+(a.distance||0),0)/1000);
+  document.getElementById('s-acts').textContent=f.length.toLocaleString();
+  document.getElementById('s-pts').textContent=pts.toLocaleString();
+  document.getElementById('s-km').textContent=km.toLocaleString()+' km';
+}
+
+function renderList() {
+  const colors={Run:'#fc4c02',Ride:'#4fc3f7',Hike:'#66bb6a',Walk:'#ffd54f',Swim:'#29b6f6'};
+  document.getElementById('act-list').innerHTML=getFiltered().slice(0,60).map(a=>`
+    <div class="act-item">
+      <div class="act-dot" style="background:${colors[a.type]||'#888'}"></div>
+      <div class="act-name">${a.name}</div>
+      <div class="act-dist">${(a.distance/1000).toFixed(1)}km</div>
+    </div>`).join('');
+}
+
+function fitBounds() {
+  const pts=allActivities.flatMap(a=>a.points);
+  if(!pts.length)return;
+  map.fitBounds([[Math.min(...pts.map(p=>p[0])),Math.min(...pts.map(p=>p[1]))],
+                 [Math.max(...pts.map(p=>p[0])),Math.max(...pts.map(p=>p[1]))]],{padding:[40,40]});
+}
+
+// ── Controls ──────────────────────────────────────────────────────────────────
+['r-r','v-r','radius',null,'r-i','v-i','max',v=>v*0.08,'r-b','v-b','blur',null]
+  .reduce((acc,v,i,a)=>i%4===0?[...acc,[a[i],a[i+1],a[i+2],a[i+3]]]:acc,[])
+  .forEach(([id,vid,opt,fn])=>{
+    const el=document.getElementById(id);
+    el?.addEventListener('input',()=>{
+      document.getElementById(vid).textContent=el.value;
+      heatLayer.setOptions({[opt]:fn?fn(+el.value):+el.value});
+    });
+  });
+
+document.getElementById('r-theme').addEventListener('change',e=>{
+  heatLayer.setOptions({gradient:gradients[e.target.value]});
+});
+
+document.querySelectorAll('.filter-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter=btn.dataset.type;
+    renderHeatmap(); updateStats(); renderList();
+  });
+});
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function setLoading(show,text,pct) {
+  document.getElementById('loading').classList.toggle('hidden',!show);
+  if(text)document.getElementById('lsub').textContent=text;
+  if(pct!==undefined)setProgress(pct);
+}
+function setProgress(pct){document.getElementById('pfill').style.width=Math.min(pct,100)+'%';}
+function setDetail(t){document.getElementById('ldetail').textContent=t;}
+
+loadAthlete();
+loadAllActivities();
+</script>
+</body>
+</html>
